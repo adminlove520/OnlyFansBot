@@ -1,65 +1,69 @@
-# 🔞 OnlyFans Bot
+# 🔞 OnlyFans Bot (OF-Scraper 增强版)
 
-基于 Siren 架构复刻的 OnlyFans 监控与下载机器人。
+基于 **OF-Scraper** 引擎重构的 OnlyFans 监控与下载机器人，彻底解决认证签名不稳定问题。
 
-## 📖 项目文档
-- [🛠️ 配置指南](docs/config_guide.md): 如何获取 Token 并启动机器人。
-- [📖 使用手册](docs/usage_manual.md): 指令说明与功能介绍。
+## 🌟 核心功能
 
-## 主要功能
-- **OnlyFans 官方同步**: 使用官方 API 抓取动态，支持动态签名算法绕过 401。
-- **精准推送**: 发现新动态时，自动 @ 所有订阅了该创作者的 Discord 用户。
-- **模块化架构**: 支持多平台扩展（已预留 Twitter 占位）。
-- **智能媒体显示**: 自动检测视频大小，大文件推送封面预览，小文件直接推送。
-- **指令系统**:
-  - `/subscribe`: 订阅指定创作者。
-  - `/unsubscribe`: 取消订阅。
-  - `/list`: 管理我的订阅。
-  - `!sync`: (管理) 同步斜杠指令。
-  - `/admin_auth`: (管理) 动态配置爬虫 Cookie。
-  - `/admin_list`: (管理) 监控全貌。
+- **OF-Scraper 内核集成**: 采用 Git 子模块形式集成 `OF-Scraper`，利用其强大的签名生成能力，完美绕过 API 验证。
+- **自动认证同步**: 在 Discord 发送的认证指令会自动同步到爬虫配置文件，无需手动修改 JSON。
+- **Discord 交互**: 随时查询用户资料、监控时间线动态，有新帖自动推送。
+- **环境隔离**: 爬虫运行在独立的 Python 3.11 虚拟环境中，与 Bot 主程序 (Python 3.10) 互不干扰。
 
-## 环境要求
-- Python 3.10+
-- Discord Bot Token
-- Chrome/Safari 模拟 (curl-cffi)
+## 🚀 安装与配置
 
-## 快速开始
+### 环境要求
+- Python 3.10+ (用于运行 Bot 主程序)
+- Python 3.11+ (用于运行 Adapter 适配器)
 
-1. **安装依赖**:
+### 目录结构
+```
+OnlyFans-Bot/          # Git 仓库根目录
+├── bot.py             # 机器人启动入口
+├── crawlers/          # 爬虫逻辑封装
+├── OF-Scraper/        # 核心引擎 (Git 子模块)
+├── scripts/           # 适配器脚本目录
+└── docs/              # 说明文档
+```
+
+### 快速开始
+
+1. **克隆仓库 (含子模块)**:
+   ```bash
+   git clone --recursive <你的仓库地址>
+   # 如果已经克隆了但没有子模块:
+   git submodule update --init --recursive
+   ```
+
+2. **安装依赖**:
    ```bash
    pip install -r requirements.txt
    ```
+   *注意: 请确保 `OF-Scraper/` 目录下的 venv 虚拟环境也已正确配置（参考 submodule 说明）。*
 
-2. **配置环境**:
-   复制 `.env.example` 并重命名为 `.env`，填写你的 Token 和管理员 ID：
-   ```env
-   DISCORD_TOKEN=你的Token
-   DISCORD_CHANNEL_ID=频道ID
-   ADMIN_USER_ID=你的DiscordID
-   ```
-
-3. **运行机器人**:
+3. **启动机器人**:
    ```bash
    python bot.py
    ```
 
-4. **快速获取 Cookie (Auth Helper)**:
-   我们提供了一个自动化工具来帮助你提取 OnlyFans 的认证信息：
-   ```bash
-   # 安装 Playwright 浏览器内核
-   python -m playwright install chromium
-   # 运行辅助脚本
-   python scripts/auth_helper.py
-   ```
-   脚本会打开浏览器，你只需登录 OF，脚本会自动在终端打印出可供机器人使用的 `/admin_auth` 命令。
+## 🛠️ 常用指令
 
-5. **同步指令**:
-   在 Discord 频道发送 `!sync` 刷出所有斜杠指令。
 
-## 目录结构
-- `bot.py`: 机器人入口及指令逻辑。
-- `crawler.py`: 爬虫管理器逻辑。
-- `database.py`: 数据库存储逻辑。
-- `crawlers/`: 核心爬虫模块目录。
-- `data/`: 持久化数据目录。
+### 1. 普通用户指令 (Slash Commands)
+- `/subscribe [username] [platform]`: 订阅一位创作者（默认 OnlyFans）。如果有新动态，机器人会艾特你。
+- `/unsubscribe [username] [platform]`: 取消订阅，不再接收该创作者的推送。
+- `/list`: 查看你目前正在监控的所有创作者列表。
+
+### 2. 管理员指令 (Prefix & Slash Commands)
+- `!sync` (前缀指令): 将所有新的斜杠指令同步到当前 Discord 服务器。
+- `/admin_auth`: 配置爬虫账号的 SESS, Auth_ID 等认证信息。支持动态更新。
+- `/admin_list`: 查看全站监控状态，包括每个创作者的订阅人数。
+
+
+- **/auth [sess] [user_id] ...**: (管理员) 配置 OnlyFans 账号凭据。
+- **!profile [username]**: 手动查询某位博主的资料。
+- **!timeline [username]**: 手动抓取某位博主的时间线。
+- **!subscribe [username]**: 订阅博主，开启自动监控。
+
+## 📄 更多文档
+
+详细配置指南和更新日志请查看 `docs/` 文件夹。

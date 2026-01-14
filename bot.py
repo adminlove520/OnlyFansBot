@@ -35,7 +35,13 @@ class SirenBot(commands.Bot):
         logger.info("Bot setup hook completed.")
 
     async def on_ready(self):
-        logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
+        logger.info(f'✅ Discord 已连接：{self.user} (ID: {self.user.id})')
+        channel = self.get_channel(CHANNEL_ID)
+        if channel:
+            try:
+                await channel.send("🚀 **OnlyFans 监控助手已在线！**\n系统已成功连接到 Discord，并正在初始化抓取模块。")
+            except Exception as e:
+                logger.error(f"发送启动通知失败: {e}")
 
     @tasks.loop(minutes=15)
     async def check_new_posts(self):
@@ -122,7 +128,10 @@ async def sync(ctx):
 @bot.tree.command(name="subscribe", description="订阅创作者动态")
 @app_commands.describe(username="创作者用户名", platform="平台 (onlyfans/twitter)")
 async def subscribe(interaction: discord.Interaction, username: str, platform: str = "onlyfans"):
-    await interaction.response.defer()
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except:
+        pass
     
     crawler = await bot.crawler_mgr.get_crawler(platform)
     if not crawler:
@@ -151,8 +160,19 @@ async def list_subs(interaction: discord.Interaction):
 
 # --- Admin Slash Commands ---
 @bot.tree.command(name="admin_auth", description="配置爬虫账号认证信息 (仅限管理员)")
-@app_commands.describe(platform="平台", username="账号名", sess="SESS Cookie", auth_id="Auth ID", x_bc="X-BC Header", user_agent="User Agent")
-async def admin_auth(interaction: discord.Interaction, platform: str, username: str, sess: str, auth_id: str, x_bc: str, user_agent: str):
+@app_commands.describe(
+    platform="平台", 
+    username="账号名", 
+    sess="SESS Cookie", 
+    auth_id="Auth ID", 
+    x_bc="X-BC Header", 
+    user_agent="User Agent",
+    x_hash="X-Hash Header (可选)",
+    x_of_rev="X-OF-Rev (可选)",
+    manual_sign="手动签名 (可选，从浏览器 F12 Network 复制)",
+    manual_time="手动时间戳 (可选，与 manual_sign 配对使用)"
+)
+async def admin_auth(interaction: discord.Interaction, platform: str, username: str, sess: str, auth_id: str, x_bc: str, user_agent: str, x_hash: str = "", x_of_rev: str = "", manual_sign: str = "", manual_time: str = ""):
     if interaction.user.id != ADMIN_USER_ID:
         return await interaction.response.send_message("❌ 权限不足。", ephemeral=True)
         
@@ -160,7 +180,11 @@ async def admin_auth(interaction: discord.Interaction, platform: str, username: 
         "sess": sess,
         "auth_id": auth_id,
         "x_bc": x_bc,
-        "user_agent": user_agent
+        "user_agent": user_agent,
+        "x_hash": x_hash,
+        "x_of_rev": x_of_rev,
+        "manual_sign": manual_sign,
+        "manual_time": manual_time
     }
     bot.db.save_auth(platform, username, auth_data)
     
@@ -169,7 +193,20 @@ async def admin_auth(interaction: discord.Interaction, platform: str, username: 
     if crawler:
         crawler.set_auth(auth_data)
         
-    await interaction.response.send_message(f"✅ 已更新 {platform} 账号 **{username}** 的认证信息！", ephemeral=True)
+    await interaction.response.send_message(f"✅ 已更新 {platform} 账号 **{username}** 的认证信息！\n系统将立即尝试使用新凭据。", ephemeral=True)
+    
+    # Send a quick check to the channel if OnlyFans
+    if platform == "onlyfans" and crawler:
+        info = await crawler.fetch_creator_info(username)
+        channel = bot.get_channel(CHANNEL_ID)
+        if info and "error" not in info:
+            logger.info(f"✅ OnlyFans 认证成功：{username}")
+            if channel:
+                await channel.send(f"✅ **OnlyFans 认证成功！**\n当前账号：**{username}**\n系统已开始监控动态。")
+        else:
+            logger.error(f"❌ OnlyFans 认证验证失败：{username}")
+            if channel:
+                await channel.send(f"❌ **OnlyFans 认证失败！**\n账号 **{username}** 的凭据似乎无效或已过期，请检查后重试。")
 
 @bot.tree.command(name="admin_list", description="查看所有监控的创作者 (仅限管理员)")
 async def admin_list(interaction: discord.Interaction):

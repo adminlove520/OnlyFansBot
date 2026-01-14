@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .venv/
 venv/
+OF-Scraper/venv/
 ENV/
 
 # Database

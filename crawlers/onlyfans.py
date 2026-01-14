@@ -1,8 +1,5 @@
 import os
-import re
 import json
-import time
-import hashlib
 import logging
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -16,87 +13,92 @@ class OnlyFansCrawler(BaseCrawler):
         self.source_name = "OnlyFans"
         self.api_base = "https://onlyfans.com/api2/v2"
         self.auth: Dict[str, str] = {}
-        # Dynamic rules for signing
-        self.rules = {
-            "static_param": "62423",
-            "start": "2",
-            "end": "4"
-        }
-
-    def set_auth(self, auth_data: Dict[str, str]):
-        """Update auth credentials: sess, auth_id, x_bc, user_agent"""
-        self.auth = auth_data
-        if 'user_agent' in auth_data:
-            self.user_agent = auth_data['user_agent']
-            self.session.headers.update({"User-Agent": self.user_agent})
-
-    def create_sign(self, path: str, query_string: str = "") -> Dict[str, str]:
-        """
-        OnlyFans request signing logic:
-        Sign = SHA1(path + query + timestamp + static_param)
-        The location of the signature in the final 'sign' header is determined by 'rules'.
-        """
-        unixtime = str(int(time.time()))
-        # Combine path and query
-        url_part = f"{path}{'?' + query_string if query_string else ''}"
+    async def fetch_via_adapter(self, command: str, username: str, limit: int = 10) -> Optional[Dict[str, Any]]:
+        """Call the external OF-Scraper adapter script"""
+        # Current file: OnlyFans-Bot/crawlers/onlyfans.py
+        # Root (OnlyFans-Bot): ..
+        # Adapter: ../scripts/of_adapter.py
+        # Venv: ../OF-Scraper/venv/Scripts/python.exe
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        adapter_script = os.path.join(root_dir, "scripts", "of_adapter.py")
+        venv_python = os.path.join(root_dir, "OF-Scraper", "venv", "Scripts", "python.exe")
         
-        # Message to hash
-        msg = f"{self.rules['static_param']}\n{unixtime}\n{url_part}\n{self.auth.get('auth_id', '0')}"
-        
-        sha = hashlib.sha1(msg.encode("utf-8")).hexdigest()
-        
-        # Format the sign header (Simplified implementation of the dynamic rule)
-        # Sign header format: checksum:unixtime:static_param:auth_id
-        sign_header = f"{sha}:{unixtime}:{self.rules['static_param']}:{self.auth.get('auth_id', '0')}"
-        
-        return {
-            "sign": sha,
-            "time": unixtime,
-            "x-bc": self.auth.get('x_bc', ''),
-            "Cookie": f"sess={self.auth.get('sess', '')}"
-        }
-
-    async def fetch_api(self, path: str, query: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
-        query_string = ""
-        if query:
-            import urllib.parse
-            query_string = urllib.parse.urlencode(query)
+        if not os.path.exists(venv_python):
+            logger.error(f"❌ Venv Python not found at: {venv_python}")
+            return None
             
-        url = f"{self.api_base}{path}"
-        if query_string:
-            url += f"?{query_string}"
-            
-        full_path = f"/api2/v2{path}"
-        sign_headers = self.create_sign(full_path, query_string)
+        cmd = [venv_python, adapter_script, command, username, "--limit", str(limit)]
         
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "X-BC": sign_headers['x-bc'],
-            "Sign": sign_headers['sign'],
-            "Time": sign_headers['time'],
-            "Cookie": sign_headers['Cookie'],
-            "Referer": "https://onlyfans.com/"
+        try:
+            logger.info(f"🔄 Calling Adapter: {command} {username}...")
+            # Run in thread pool to avoid blocking async loop
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                logger.error(f"❌ Adapter failed (code {process.returncode}): {stderr.decode()}")
+                return None
+                
+            output = stdout.decode().strip()
+            if not output:
+                logger.error("❌ Adapter returned empty output")
+                return None
+                
+            result = json.loads(output)
+            if not result.get("success"):
+                logger.error(f"❌ Adapter reported error: {result.get('error')}")
+                if stderr:
+                    logger.error(f"🔍 Adapter Traceback: {stderr.decode()}")
+                return None
+                
+            return result.get("data")
+            
+        except Exception as e:
+            logger.error(f"❌ Adapter execution error: {e}")
+            return None
+
+    def _update_auth_file(self):
+        """Sync current auth to OF-Scraper's auth.json"""
+        if not self.auth:
+            return
+            
+        # Target path (Default Windows path for OF-Scraper)
+        # Note: OF-Scraper uses 'main_profile' by default as seen in logs
+        auth_path = os.path.expanduser("~/.config/ofscraper/profiles/main_profile/auth.json")
+        os.makedirs(os.path.dirname(auth_path), exist_ok=True)
+        
+        # Prepare content (keys matching schema.py)
+        content = {
+            "sess": self.auth.get('sess', ''),
+            "auth_id": self.auth.get('auth_id', '0'),
+            "auth_uid": self.auth.get('auth_uid', self.auth.get('auth_id', '0')), # Fallback to auth_id if uid missing
+            "user_agent": self.auth.get('user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0'),
+            "x-bc": self.auth.get('x_bc', '')
         }
         
         try:
-            response = await self.session.get(url, headers=headers)
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 401:
-                logger.error("OnlyFans Auth Expired (401) for %s", url)
-                return {"error": "AUTH_EXPIRED"}
-            else:
-                logger.warning("OnlyFans API failed: %d for %s", response.status_code, url)
+            with open(auth_path, 'w') as f:
+                json.dump(content, f, indent=4)
+            logger.info(f"✅ Synced credentials to {auth_path}")
         except Exception as e:
-            logger.error("OnlyFans API error: %s", e)
-        return None
+            logger.error(f"❌ Failed to sync auth file: {e}")
+
+    def set_auth(self, auth_data: Dict[str, str]):
+        """Update auth credentials and sync to disk"""
+        super().set_auth(auth_data) # Updates self.auth in BaseCrawler (if it exists) or just manually
+        self.auth = auth_data # Ensure it is set
+        self._update_auth_file()
 
     async def fetch_creator_info(self, username: str) -> Optional[Dict[str, Any]]:
-        data = await self.fetch_api(f"/users/{username}")
-        if data and "id" in data:
+        data = await self.fetch_via_adapter("profile", username)
+        if data and ("id" in data or "username" in data):
             return {
-                "id": data["id"],
-                "username": data["username"],
+                "id": str(data.get("id")),
+                "username": data.get("username"),
                 "display_name": data.get("name"),
                 "avatar_url": data.get("avatar"),
                 "platform": "onlyfans"
@@ -104,29 +106,38 @@ class OnlyFansCrawler(BaseCrawler):
         return None
 
     async def crawl_posts(self, username: str, limit: int = 10) -> List[Dict[str, Any]]:
-        # Need user ID first
-        user_info = await self.fetch_creator_info(username)
-        if not user_info:
-            return []
-            
-        user_id = user_info['id']
-        data = await self.fetch_api(f"/users/{user_id}/posts", query={"limit": limit, "order": "publish_date_desc"})
+        data = await self.fetch_via_adapter("timeline", username, limit)
         
         posts = []
         if data and isinstance(data, list):
             for item in data:
+                # OF-Scraper returns processed objects or raw json?
+                # Based on timeline.py it returns list of dicts from API
+                
+                # Check structure
+                post_id = str(item.get('id'))
+                text = item.get('text')
+                posted_at = item.get('postedAt')
+                
                 media = []
                 for m in item.get('media', []):
                     if m.get('canView'):
                         media.append({"url": m.get('full'), "type": m.get('type')})
                         
                 posts.append({
-                    "post_id": str(item['id']),
-                    "content": item.get('text'),
+                    "post_id": post_id,
+                    "content": text,
                     "media_urls": media,
                     "is_ppv": item.get('isFree') is False and not item.get('canView'),
                     "price": item.get('price'),
-                    "created_at": item.get('postedAt'),
+                    "created_at": posted_at,
                     "platform": "onlyfans"
                 })
         return posts
+
+    # Legacy methods removed/unused
+    def create_sign(self, path: str, query_string: str = "") -> Dict[str, str]:
+        return {}
+    async def fetch_api(self, path: str, query: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        return None
+
