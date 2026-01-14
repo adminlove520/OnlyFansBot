@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Database
+data/*.db
+data/*.db-journal
+*.db
+
+# Configuration & Secrets
+.env
+.env.local
+cookie.json
+auth_*.json
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
