@@ -89,8 +89,7 @@ class OnlyFansCrawler(BaseCrawler):
 
     def set_auth(self, auth_data: Dict[str, str]):
         """Update auth credentials and sync to disk"""
-        super().set_auth(auth_data) # Updates self.auth in BaseCrawler (if it exists) or just manually
-        self.auth = auth_data # Ensure it is set
+        self.auth = auth_data 
         self._update_auth_file()
 
     async def fetch_creator_info(self, username: str) -> Optional[Dict[str, Any]]:

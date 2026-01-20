@@ -46,6 +46,8 @@ class SirenBot(commands.Bot):
     @tasks.loop(minutes=15)
     async def check_new_posts(self):
         logger.info("Checking for new posts...")
+        
+        # 1. 检查订阅的创作者动态
         creators = self.db.get_all_creators()
         for creator in creators:
             crawler = await self.crawler_mgr.get_crawler(creator['platform'])
@@ -66,7 +68,33 @@ class SirenBot(commands.Bot):
             except Exception as e:
                 logger.error("Error polling creator %s: %s", creator['username'], e)
 
-    async def push_post_to_subscribers(self, creator, post):
+        # 2. LeakedZone 全局动态发现 (无需订阅即可推送)
+        try:
+            lz_crawler = await self.crawler_mgr.get_crawler("leakedzone")
+            if lz_crawler:
+                logger.info("Scanning LeakedZone for global latest posts...")
+                latest_posts = await lz_crawler.crawl_latest()
+                for post in latest_posts:
+                    if not self.db.is_post_exists(post['post_id'], post['platform']):
+                        # 自动为新作者创建记录（如果不存在）
+                        display_name = post.get('username')
+                        creator_id = self.db.add_creator(post['username'], post['platform'], display_name)
+                        post['creator_id'] = creator_id
+                        saved = self.db.save_post(post)
+                        if saved:
+                            # 构造简易创作者对象进行推送
+                            fake_creator = {
+                                'id': creator_id,
+                                'username': post['username'],
+                                'display_name': display_name,
+                                'platform': post['platform'],
+                                'avatar_url': None
+                            }
+                            await self.push_post_to_subscribers(fake_creator, post, is_global=True)
+        except Exception as e:
+            logger.error(f"Error in LeakedZone global check: {e}")
+
+    async def push_post_to_subscribers(self, creator, post, is_global=False):
         channel = self.get_channel(CHANNEL_ID)
         if not channel: return
         
@@ -74,7 +102,9 @@ class SirenBot(commands.Bot):
         mentions = " ".join([f"<@{uid}>" for uid in sub_ids])
         
         embed = self.create_post_embed(creator, post)
-        content = f"📢 **{creator['display_name'] or creator['username']}** 有新动态！\n{mentions}"
+        
+        title_prefix = "🌟 **[发现]**" if is_global else "📢"
+        content = f"{title_prefix} **{creator['display_name'] or creator['username']}** 有新动态！\n{mentions if mentions else ''}"
         
         # Determine media to push (Simplified large file handling)
         files = []
@@ -126,13 +156,14 @@ async def sync(ctx):
 
 # --- User Slash Commands ---
 @bot.tree.command(name="subscribe", description="订阅创作者动态")
-@app_commands.describe(username="创作者用户名", platform="平台 (onlyfans/twitter)")
+@app_commands.describe(username="创作者用户名", platform="平台 (onlyfans/twitter/leakedzone)")
 async def subscribe(interaction: discord.Interaction, username: str, platform: str = "onlyfans"):
     try:
         await interaction.response.defer(ephemeral=True)
     except:
         pass
     
+    platform = platform.lower()
     crawler = await bot.crawler_mgr.get_crawler(platform)
     if not crawler:
         return await interaction.followup.send(f"❌ 不支持的平台: {platform}")
