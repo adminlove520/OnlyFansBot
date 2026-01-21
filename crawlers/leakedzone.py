@@ -4,7 +4,6 @@ import os
 import json
 import httpx
 from datetime import datetime
-from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup as bs
 from crawlers.base import BaseCrawler
 from typing import List, Dict, Any, Optional

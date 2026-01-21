@@ -1,5 +1,5 @@
 discord.py
-httpx
+httpx[http2]
 aiohttp
 beautifulsoup4
 lxml
