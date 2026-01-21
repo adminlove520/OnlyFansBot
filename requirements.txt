@@ -1,6 +1,8 @@
 discord.py
 httpx
+aiohttp
 beautifulsoup4
+lxml
 python-dotenv
 apscheduler
 PyNaCl

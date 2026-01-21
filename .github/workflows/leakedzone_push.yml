@@ -22,7 +22,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install httpx curl_cffi beautifulsoup4 python-dotenv lxml
+          pip install -r requirements.txt
 
       - name: Run LeakedZone Push
         env:
