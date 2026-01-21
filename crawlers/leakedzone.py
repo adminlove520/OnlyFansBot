@@ -129,20 +129,38 @@ class LeakedZoneCrawler(BaseCrawler):
             # 代理配置
             proxy = os.getenv("HTTP_PROXY")
             
+            # 基础 Header 构造
+            headers = {
+                "User-Agent": self.user_agent,
+                "Referer": "https://leakedzone.com/",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1"
+            }
+
+            # 【GHA 专项优化】在 Linux 环境下，impersonate 建议选择更低或更稳的版本
+            # 并且需要补全客户端指纹头
+            imp = "chrome120"
+            if "Linux" in self.user_agent:
+                imp = "chrome110"
+                headers["Sec-Ch-Ua-Platform"] = '"Linux"'
+            else:
+                headers["Sec-Ch-Ua-Platform"] = '"Windows"'
+            
             # 使用 curl_cffi 模拟浏览器特征
             self._session = AsyncSession(
-                impersonate="chrome120",
-                headers={
-                    "User-Agent": self.user_agent,
-                    "Referer": "https://leakedzone.com/",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
+                impersonate=imp,
+                headers=headers,
                 proxies={"http": proxy, "https": proxy} if proxy else None,
                 allow_redirects=True,
-                timeout=40 # 增加超时以应对代理波动
+                timeout=40
             )
             
-            # 手动合并 Cookie (加固解析)
+            # 手动合并 Cookie
             if self.cookie_str:
                 for item in self.cookie_str.split(';'):
                     item = item.strip()

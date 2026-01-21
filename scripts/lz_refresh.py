@@ -95,10 +95,33 @@ def refresh_cookie():
                         
                         cookies = driver.get_cookies()
                         cookie_dict = {c['name']: c['value'] for c in cookies}
+                        ua = driver.execute_script("return navigator.userAgent")
                         
                         if 'cf_clearance' in cookie_dict:
-                            success = True
-                            break
+                            # 【GHA 核心加固】过盾后的实时校验
+                            # 使用 curl_cffi 同步版进行冒烟测试，确保 Cookie 在非浏览器下也有效
+                            from curl_cffi import requests as curl_requests
+                            logger.info("🧪 正在进行过盾后的冒烟测试 (curl_requests)...")
+                            try:
+                                # 模拟 Linux/Windows 指纹
+                                imp = "chrome120"
+                                if "Linux" in ua: imp = "chrome110"
+                                
+                                test_res = curl_requests.get(
+                                    TARGET_URL,
+                                    cookies=cookie_dict,
+                                    headers={"User-Agent": ua},
+                                    impersonate=imp,
+                                    timeout=10
+                                )
+                                if test_res.status_code == 200 and "Just a moment" not in test_res.text:
+                                    logger.info("✅ 冒烟测试通过！凭据真实有效。")
+                                    success = True
+                                    break
+                                else:
+                                    logger.warning(f"❌ 冒烟测试未通过 (Status: {test_res.status_code})，继续等待反爬失效...")
+                            except Exception as test_e:
+                                logger.warning(f"⚠️ 冒烟测试异常: {test_e}")
                         else:
                             logger.warning("🔸 页面正常但尚未拿到 cf_clearance，等待下一次循环...")
                 else:
@@ -110,7 +133,6 @@ def refresh_cookie():
             time.sleep(3)
             
         if success:
-            ua = driver.execute_script("return navigator.userAgent")
             save_auth(cookie_dict, ua)
             driver.quit()
             return True

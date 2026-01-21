@@ -79,13 +79,14 @@ async def fetch_douban_movies():
     """获取豆瓣新片榜"""
     url = "https://api.baiwumm.com/api/douban-movic" 
     try:
-        async with httpx.AsyncClient() as client:
+        # trust_env=False 强制不使用系统代理，verify=False 忽略 SSL 证书错误(提高兼容性)
+        async with httpx.AsyncClient(trust_env=False, verify=False) as client:
             res = await client.get(url, timeout=15)
             if res.status_code == 200:
                 data = res.json()
                 if "data" in data: return data["data"]
     except Exception as e:
-        logger.warning(f"获取豆瓣电影失败: {e}")
+        logger.warning(f"获取豆瓣电影失败 (请检查网络或 API): {e}")
     return []
 
 async def push_movie_item(movie):
@@ -172,7 +173,7 @@ async def push_item(crawler: LeakedZoneCrawler, item):
             }
         ],
         "footer": {
-            "text": f"OnlyFans-Bot 涩涩先锋 • {datetime.now().strftime('%H:%M')}"
+            "text": f"OnlyFans-Bot 情报先锋 • {datetime.now().strftime('%H:%M')}"
         }
     }
     
@@ -216,11 +217,28 @@ async def main():
             logger.error("❌ 凭据校验失败，请检查输入")
         return
 
-    # 1. 启动校验
+    # --- 1. 初始化变量与环境 ---
+    history = load_history()
+    all_items = []
+    
+    # 初始化监控平台列表
+    platforms = ["OnlyFans", "Fansly", "Celebrity+Nudes", "Reddit", "Snapchat"]
+    try:
+        # 优先读取配置文件
+        cat_file = "crawlers/leakedzone-category.json"
+        if not os.path.exists(cat_file): cat_file = "data/lz_auth.json"
+        
+        with open(cat_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if "categories" in data and isinstance(data["categories"], list):
+                platforms = data["categories"]
+                logger.info(f"已加载监控平台: {platforms}")
+    except: pass
+
+    # --- 2. 权限校验 ---
     if not await crawler.check_auth():
         logger.error("🚨 无法通过 LeakedZone 验证（Cloudflare 拦截或 Cookie 过期）")
         logger.info("💡 正在尝试自动运行刷新脚本...")
-        # 尝试自动触发刷新
         try:
             refresh_script = os.path.join(project_root, "scripts", "lz_refresh.py")
             process = await asyncio.create_subprocess_exec(
@@ -244,33 +262,15 @@ async def main():
             logger.error(f"❌ 触发刷新脚本异常: {e}")
             return
 
-    history = load_history()
-    all_items = []
-
-    # 0. 发送启动卡片
+    # --- 3. 发送启动通报 ---
     await send_startup_card(platforms)
     
-    # 2. 采集数据
+    # --- 4. 执行采集 ---
     logger.info("✅正在采集 (当日视频&图片)...")
     all_items.extend(await crawler.crawl_tag("videos"))
     all_items.extend(await crawler.crawl_tag("photos"))
 
-    logger.info("✅正在采集平台分类...")
-    
-    # Load configurable categories
-    platforms = ["OnlyFans", "Fansly", "Celebrity+Nudes", "Reddit", "Snapchat"]
-    try:
-        # 优先读取 leakedzone-category.json
-        cat_file = "crawlers/leakedzone-category.json"
-        if not os.path.exists(cat_file): cat_file = "data/lz_auth.json"
-        
-        with open(cat_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if "categories" in data and isinstance(data["categories"], list):
-                platforms = data["categories"]
-                logger.info(f"已加载平台分类: {platforms}")
-    except: pass
-
+    logger.info("✅正在采集各平台详情动态...")
     for p in platforms:
         all_items.extend(await crawler.crawl_category(p))
         await asyncio.sleep(1)
