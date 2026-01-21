@@ -1,4 +1,4 @@
-name: LeakedZone Timed Push
+name: Leakedzone-Push
 
 on:
   schedule:
@@ -24,10 +24,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Refresh Cookies & Metadata
+        env:
+          LZ_WEBHOOK_URL: ${{ secrets.LZ_WEBHOOK_URL }}
+        run: |
+          # 1. 自动尝试刷新 Cookie
+          python scripts/lz_refresh.py || echo "Refresh skipped or failed"
+          # 2. 这里的刷新可以顺便更新 metadata 缓存 (后续爬虫会自动完成)
+
       - name: Run LeakedZone Push
         env:
-          LEAKEDZONE_COOKIES: ${{ secrets.LEAKEDZONE_COOKIES }}
-          LEAKEDZONE_UA: ${{ secrets.LEAKEDZONE_UA }}
           LZ_WEBHOOK_URL: ${{ secrets.LZ_WEBHOOK_URL }}
         run: |
           python scripts/leakedzone_push.py
@@ -38,5 +44,5 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add . || true
           git pull --rebase || true
-          git commit -m "update: sync leakedzone push history [skip ci]" || true
+          git commit -m "update: sync leakedzone push history [skip ci]|涩涩适度哦~" || true
           git push origin main || true

@@ -8,3 +8,4 @@ apscheduler
 PyNaCl
 playwright
 curl_cffi
+seleniumbase
