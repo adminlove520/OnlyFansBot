@@ -1,13 +1,15 @@
-# 🔞 OnlyFans Bot (OF-Scraper 增强版)
+# 🔞 OnlyFans-Bot (智能情报先锋)
 
-基于 **OF-Scraper** 引擎重构的 OnlyFans 监控与下载机器人，彻底解决认证签名不稳定问题。
+基于 **OF-Scraper** 核心，专为 OnlyFans、LeakedZone 等平台定制的智能监控与情报推送系统。
 
 ## 🌟 核心功能
 
-- **OF-Scraper 内核集成**: 采用 Git 子模块形式集成 `OF-Scraper`，利用其强大的签名生成能力，完美绕过 API 验证。
-- **自动认证同步**: 在 Discord 发送的认证指令会自动同步到爬虫配置文件，无需手动修改 JSON。
-- **Discord 交互**: 随时查询用户资料、监控时间线动态，有新帖自动推送。
-- **环境隔离**: 爬虫运行在独立的 Python 3.11 虚拟环境中，与 Bot 主程序 (Python 3.10) 互不干扰。
+- **🚀 跨平台情报站**: 完美集成 **LeakedZone** 动态抓取，支持自动识别创作者所属平台（Reddit/Fansly/Twitter 等）并分类推送。
+- **🛡️ 强力 Cloudflare 绕过**: 采用 `SeleniumBase` (UC Mode) + `curl_cffi` 指纹模拟技术。支持 Windows/Linux (GHA) 自适应过盾，解决五秒盾截流。
+- **🍿 豆瓣福利速递**: 任务结束后自动全量推送豆瓣最新电影榜单，情报福利两不误。
+- **OF-Scraper 内核集成**: 本地化集成 `OF-Scraper` 引擎，利用其强大的签名生成能力，完美下载媒体资产。
+- **Discord 深度交互**: 全流程 Embed 卡片展示。支持自动同步认证、查询资料、监控时间线及新帖实时触达。
+- **自动化运维**: 完美适配 GitHub Actions，全流程自动化“刷新-抓取-推送-存储”，无需人工干预。
 
 ## 🚀 安装与配置
 

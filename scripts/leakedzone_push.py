@@ -90,26 +90,27 @@ async def fetch_douban_movies():
     return []
 
 async def push_movie_item(movie):
-    """推送单条电影信息"""
+    """推送单条电影信息 """
     title = movie.get("title", "未知电影")
-    rating = movie.get("rating", "N/A")
-    original_title = movie.get("original_title", "")
-    year = movie.get("year", "")
-    info = movie.get("info", "") # 简介或演员
-    cover = movie.get("cover", "") # 海报URL
+    score = movie.get("score") or "N/A"
+    hot = movie.get("hot", 0)
     douban_url = movie.get("url", "https://movie.douban.com")
-
+    
+    desc_lines = []
+    desc_lines.append(f"**评分**: ⭐ `{score}`")
+    if hot > 0:
+        desc_lines.append(f"**热度**: 🔥 `{hot}`")
+    
     embed = {
-        "title": f"🎬 豆瓣新片：{title}",
+        "title": f"🍿 豆瓣新片：{title}",
         "url": douban_url,
-        "description": f"**原名**: {original_title} ({year})\n**评分**: ⭐ `{rating}`\n\n> {info[:100]}...",
+        "description": "\n".join(desc_lines),
         "color": 0x00BB29, # 豆瓣绿
         "fields": [
-            {"name": "详情", "value": f"[🔗 豆瓣链接]({douban_url})", "inline": True}
+            {"name": "直达通道", "value": f"[🔗 点击查看详情(豆瓣)]({douban_url})", "inline": True}
         ],
-        "footer": {"text": "OnlyFans-Bot 精选推荐"}
+        "footer": {"text": f"OnlyFans-Bot 豆瓣精选·新片速递"}
     }
-    if cover: embed["image"] = {"url": cover}
     await send_webhook(embed)
 
 async def send_webhook(embed):
@@ -300,6 +301,14 @@ async def main():
     logger.info("🍿 （戒色，来点小清新~）正在获取豆瓣新片榜...")
     movies = await fetch_douban_movies()
     if movies:
+        # 发送转场分隔卡片
+        await send_webhook({
+            "title": "✅ 情报扫描任务圆满完成",
+            "description": "所有当日动态已处理完毕， **OnlyFans-Bot** 豆瓣精选：\n🍿 **今日豆瓣新片速递**",
+            "color": 0x00BB29
+        })
+        await asyncio.sleep(2)
+
         logger.info(f"📊 发现 {len(movies)} 部新片，正在推送...")
         for m in movies:
             await push_movie_item(m)
